@@ -1,1 +1,1 @@
-# SynergiCore
+# NeuroPlex-Nexus

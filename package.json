@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/YeShanBoYun-Studio/NeuroPlex-Nexus/issues"
   },
-  "homepage": "https://github.com/YeShanBoYun-Studio/NeuroPlex-Nexus#readme"
+  "homepage": "https://github.com/YeShanBoYun-Studio/NeuroPlex-Nexus#readme",
+  "dependencies": {
+    "reactflow": "^11.11.4"
+  }
 }

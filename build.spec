@@ -6,7 +6,8 @@ block_cipher = None
 datas = [
     ('frontend/build', 'frontend/build'),
     ('data', './data'),
-    ('backend/modules', 'backend/modules')
+    ('backend/modules', 'backend/modules'),
+    ('backend/modules/text_cache.py', 'backend/modules')
 ]
 
 flask_data = collect_all('flask')

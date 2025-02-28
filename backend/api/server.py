@@ -1,9 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from modules.text_cache import TextCache
+from backend.modules.text_cache import TextCache
 from datetime import datetime
 import uuid
 import config

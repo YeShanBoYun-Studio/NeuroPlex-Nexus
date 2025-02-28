@@ -1,10 +1,13 @@
 import sqlite3
+import os
 from datetime import datetime
 import uuid
 
 class TextCache:
     def __init__(self, db_path='data/cache.db'):
         self.db_path = db_path
+        # 确保数据目录存在
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._initialize_db()
 
     def _initialize_db(self):

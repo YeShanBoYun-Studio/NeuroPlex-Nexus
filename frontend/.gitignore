@@ -1,3 +1,23 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+/cypress/videos/
+/cypress/screenshots/
+
+# Production
+/dist
+/build
+
+# Environment files
+.env*
+!.env.example
+!.env.development
+!.env.production
+
 # Logs
 logs
 *.log
@@ -7,18 +27,44 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# TypeScript
+*.tsbuildinfo
+.tscache/
+
+# Development
+.eslintcache
+.stylelintcache
+.DS_Store
+*.pem
+.vercel
+*.local
+
+# Cache
+.cache/
+.npm/
+.eslintcache/
+.stylelintcache/
+
+# Husky
+.husky/_/
+.husky/.gitignore
+
+# Generated files
+*.generated.*
+src/types/generated/
+
+# PWA
+dev-dist/
+workbox-*.js
+sw.js

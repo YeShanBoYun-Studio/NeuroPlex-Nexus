@@ -1,144 +1,135 @@
 import axios, { AxiosInstance } from 'axios';
-import {
-    WorkflowStart,
-    WorkflowResponse,
-    UserInput,
-    BranchCreate,
-    BranchResponse,
-    StepResponse,
-    CacheEntry,
-    ApiResponse
+import { configService } from './config';
+import type { 
+  CreateWorkflowRequest,
+  CreateWorkflowResponse,
+  WorkflowStepRequest,
+  WorkflowStepResponse,
+  BranchCreateRequest,
+  BranchCreateResponse,
+  CacheEntry,
+  CacheSettings,
+  CacheStats,
+  WebSocketMessage,
 } from '../types/api';
 
 class ApiService {
-    private api: AxiosInstance;
-    private ws: WebSocket | null = null;
-    private wsCallbacks: ((data: any) => void)[] = [];
+  private axios: AxiosInstance;
 
-    constructor() {
-        this.api = axios.create({
-            baseURL: 'http://localhost:8000',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-    }
+  constructor() {
+    this.axios = axios.create({
+      baseURL: configService.getApiUrl(),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    // Cache Settings
-    async updateCacheSettings(settings: {
-        max_size_mb: number;
-        compression_enabled: boolean;
-        compression_threshold: number;
-    }): Promise<ApiResponse<void>> {
-        try {
-            const response = await this.api.post('/cache/settings', settings);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to update cache settings' };
+    // Add response interceptor for error handling
+    this.axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (configService.isFeatureEnabled('debug')) {
+          console.error('API Error:', error);
         }
-    }
+        return Promise.reject(error);
+      }
+    );
+  }
 
-    // Workflow Management
-    async startRelayWorkflow(data: WorkflowStart): Promise<ApiResponse<WorkflowResponse>> {
-        try {
-            const response = await this.api.post('/workflows/relay', data);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to start relay workflow' };
-        }
-    }
+  // Workflow Management
+  async createWorkflow(request: CreateWorkflowRequest): Promise<CreateWorkflowResponse> {
+    const response = await this.axios.post('/workflows', request);
+    return response.data;
+  }
 
-    async startDebateWorkflow(data: WorkflowStart): Promise<ApiResponse<WorkflowResponse>> {
-        try {
-            const response = await this.api.post('/workflows/debate', data);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to start debate workflow' };
-        }
-    }
+  async getWorkflowHistory(workflowId: string): Promise<CacheEntry[]> {
+    const response = await this.axios.get(`/workflows/${workflowId}/history`);
+    return response.data;
+  }
 
-    async startCustomWorkflow(data: WorkflowStart): Promise<ApiResponse<WorkflowResponse>> {
-        try {
-            const response = await this.api.post('/workflows/custom', data);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to start custom workflow' };
-        }
-    }
+  async executeStep(request: WorkflowStepRequest): Promise<WorkflowStepResponse> {
+    const response = await this.axios.post(`/workflows/${request.workflow_id}/step`, request);
+    return response.data;
+  }
 
-    // Step Execution
-    async executeStep(workflowId: string, modelName?: string): Promise<ApiResponse<StepResponse>> {
-        try {
-            const response = await this.api.post(`/workflows/${workflowId}/step`, { model_name: modelName });
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to execute step' };
-        }
-    }
+  async createBranch(request: BranchCreateRequest): Promise<BranchCreateResponse> {
+    const response = await this.axios.post('/workflows/branch', request);
+    return response.data;
+  }
 
-    // User Input
-    async addUserInput(workflowId: string, input: UserInput): Promise<ApiResponse<StepResponse>> {
-        try {
-            const response = await this.api.post(`/workflows/${workflowId}/input`, input);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to add user input' };
-        }
-    }
+  // Cache Management
+  async getCacheSettings(): Promise<CacheSettings> {
+    const response = await this.axios.get('/cache/settings');
+    return response.data;
+  }
 
-    // History Management
-    async getHistory(workflowId: string): Promise<ApiResponse<CacheEntry[]>> {
-        try {
-            const response = await this.api.get(`/workflows/${workflowId}/history`);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to get history' };
-        }
-    }
+  async updateCacheSettings(settings: Partial<CacheSettings>): Promise<CacheSettings> {
+    const response = await this.axios.patch('/cache/settings', settings);
+    return response.data;
+  }
 
-    // Branch Management
-    async createBranch(data: BranchCreate): Promise<ApiResponse<BranchResponse>> {
-        try {
-            const response = await this.api.post('/workflows/branch', data);
-            return { data: response.data };
-        } catch (error: any) {
-            return { error: error.response?.data?.detail || 'Failed to create branch' };
-        }
-    }
+  async getCacheStats(): Promise<CacheStats> {
+    const response = await this.axios.get('/cache/stats');
+    return response.data;
+  }
 
-    // WebSocket Connection
-    connectWebSocket(workflowId: string, callback: (data: any) => void) {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.close();
-        }
-
-        this.ws = new WebSocket(`ws://localhost:8000/ws/${workflowId}`);
-        this.wsCallbacks.push(callback);
-
-        this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.wsCallbacks.forEach(cb => cb(data));
-        };
-
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        this.ws.onclose = () => {
-            console.log('WebSocket connection closed');
-            // Attempt to reconnect after 5 seconds
-            setTimeout(() => this.connectWebSocket(workflowId, callback), 5000);
-        };
-    }
-
-    disconnectWebSocket() {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-            this.wsCallbacks = [];
-        }
-    }
+  async clearCache(): Promise<void> {
+    await this.axios.post('/cache/clear');
+  }
 }
 
-// Create a singleton instance
+export class WebSocketClient {
+  private ws: WebSocket | null = null;
+  private messageHandlers: ((data: WebSocketMessage) => void)[] = [];
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimeout = 1000;
+
+  constructor(private workflowId: string) {
+    this.connect();
+  }
+
+  private connect() {
+    const wsUrl = `${configService.getWsUrl()}/workflows/${this.workflowId}`;
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data) as WebSocketMessage;
+      this.messageHandlers.forEach(handler => handler(data));
+    };
+
+    this.ws.onclose = () => {
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        setTimeout(() => {
+          this.reconnectAttempts++;
+          this.connect();
+        }, this.reconnectTimeout * Math.pow(2, this.reconnectAttempts));
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      if (configService.isFeatureEnabled('debug')) {
+        console.error('WebSocket Error:', error);
+      }
+    };
+  }
+
+  onMessage(handler: (data: WebSocketMessage) => void) {
+    this.messageHandlers.push(handler);
+  }
+
+  close() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  send(data: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+}
+
 export const apiService = new ApiService();

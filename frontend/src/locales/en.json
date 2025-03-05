@@ -1,0 +1,76 @@
+{
+  "common": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "settings": "Settings",
+    "refresh": "Refresh",
+    "language": "Language",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "menu": "Menu",
+    "send": "Send",
+    "theme": {
+      "name": "Theme",
+      "change": "Change theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
+  },
+  "errors": {
+    "notFound": "Not Found",
+    "serverError": "Server Error",
+    "unauthorized": "Please login to continue",
+    "forbidden": "Access denied",
+    "required": "This field is required",
+    "workflow_error": "Workflow Error",
+    "invalid_json": "Invalid JSON format",
+    "network_error": "Network connection error"
+  },
+  "settings": {
+    "title": "Settings",
+    "max_steps": "Maximum Steps",
+    "inheritance": {
+      "title": "Context Inheritance",
+      "full_history": "Full History",
+      "last_3_steps": "Last 3 Steps",
+      "prompt_chain": "Prompt Chain"
+    }
+  },
+  "workflow": {
+    "relay": {
+      "title": "Relay Mode",
+      "description": "Build on each other's ideas",
+      "session_name": "Session Name",
+      "initial_content": "Initial Content",
+      "enter_prompt": "Enter your prompt",
+      "press_enter": "Press Enter to send",
+      "start": "Start Relay"
+    },
+    "debate": {
+      "title": "Debate Mode",
+      "description": "Explore different perspectives",
+      "select_topic": "Select Topic",
+      "enter_topic": "Enter topic",
+      "your_position": "Your Position",
+      "pro": "Pro",
+      "con": "Con",
+      "start": "Start Debate"
+    },
+    "custom": {
+      "title": "Custom Mode",
+      "description": "Create your own workflow",
+      "workflow_name": "Workflow Name",
+      "prompt_template": "Prompt Template",
+      "prompt_variables": "Variables (JSON)",
+      "initial_content": "Initial Content",
+      "advanced_settings": "Advanced Settings",
+      "start": "Start Workflow"
+    }
+  }
+}

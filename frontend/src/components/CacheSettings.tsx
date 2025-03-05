@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Typography, Slider, Switch, Button } from '@mui/material';
+import { Box, Typography, Slider, Switch, Button, Snackbar, Alert } from '@mui/material';
+import { useTranslation } from '../contexts/LanguageContext';
 import { apiService } from '../services/api';
 
 interface CacheSettingsProps {
@@ -7,9 +8,12 @@ interface CacheSettingsProps {
 }
 
 export const CacheSettings: React.FC<CacheSettingsProps> = ({ workflowId }) => {
+    const { t } = useTranslation();
     const [maxSizeMB, setMaxSizeMB] = useState(100);
     const [compressionEnabled, setCompressionEnabled] = useState(true);
     const [compressionThreshold, setCompressionThreshold] = useState(0.8);
+    const [showSuccess, setShowSuccess] = useState(false);
+    const [showError, setShowError] = useState(false);
 
     const handleSave = async () => {
         try {
@@ -18,21 +22,26 @@ export const CacheSettings: React.FC<CacheSettingsProps> = ({ workflowId }) => {
                 compression_enabled: compressionEnabled,
                 compression_threshold: compressionThreshold
             });
-            // Show success message
+            setShowSuccess(true);
         } catch (error) {
-            // Handle error
+            setShowError(true);
         }
+    };
+
+    const handleCloseSnackbar = () => {
+        setShowSuccess(false);
+        setShowError(false);
     };
 
     return (
         <Box sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-                Cache Pool Settings
+                {t('settings.cache.title')}
             </Typography>
 
             <Box sx={{ mb: 3 }}>
                 <Typography gutterBottom>
-                    Maximum Cache Size: {maxSizeMB} MB
+                    {t('settings.cache.max_size')}: {maxSizeMB} MB
                 </Typography>
                 <Slider
                     value={maxSizeMB}
@@ -45,7 +54,7 @@ export const CacheSettings: React.FC<CacheSettingsProps> = ({ workflowId }) => {
 
             <Box sx={{ mb: 3 }}>
                 <Typography gutterBottom>
-                    Enable Compression
+                    {t('settings.cache.compression')}
                 </Typography>
                 <Switch
                     checked={compressionEnabled}
@@ -56,7 +65,7 @@ export const CacheSettings: React.FC<CacheSettingsProps> = ({ workflowId }) => {
             {compressionEnabled && (
                 <Box sx={{ mb: 3 }}>
                     <Typography gutterBottom>
-                        Compression Threshold: {Math.round(compressionThreshold * 100)}%
+                        {t('settings.cache.threshold')}: {Math.round(compressionThreshold * 100)}%
                     </Typography>
                     <Slider
                         value={compressionThreshold}
@@ -73,8 +82,28 @@ export const CacheSettings: React.FC<CacheSettingsProps> = ({ workflowId }) => {
                 onClick={handleSave}
                 disabled={!workflowId}
             >
-                Save Settings
+                {t('common.save')}
             </Button>
+
+            <Snackbar 
+                open={showSuccess} 
+                autoHideDuration={6000} 
+                onClose={handleCloseSnackbar}
+            >
+                <Alert severity="success" onClose={handleCloseSnackbar}>
+                    {t('settings.cache.save_success')}
+                </Alert>
+            </Snackbar>
+
+            <Snackbar 
+                open={showError} 
+                autoHideDuration={6000} 
+                onClose={handleCloseSnackbar}
+            >
+                <Alert severity="error" onClose={handleCloseSnackbar}>
+                    {t('errors.network_error')}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

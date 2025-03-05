@@ -1,182 +1,172 @@
 """
 FastAPI server implementation for NeuraCollab.
+Following OpenAPI 3.0 specification.
 """
+from contextlib import asynccontextmanager
+import logging
+import os
+from typing import Dict
 
-from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from uuid import UUID
-import json
-import asyncio
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer
 
-from .api import NeuraCollab
-from .models import WorkflowConfig, CacheEntry
-from .examples import OpenAILLM  # For demo purposes
+from .cache_pool import NeuralCachePool
+from .engine import CollaborationEngine
+from .dispatcher import LLMDispatcher
+from .adapters.llm_adapters import create_adapter
+from .init_db import init_database
+from .ai_config import AIConfigManager
 
-# API Models
-class WorkflowStart(BaseModel):
-    mode: str
-    initial_content: str
-    config: Optional[Dict] = None
-    roles: Optional[List[str]] = None
-    max_steps: Optional[int] = None
+from .workflow_controller import get_workflow_controller
+from .cache_controller import get_cache_controller
+from .branch_controller import get_branch_controller
+from .ai_config_controller import get_ai_config_controller
+from .websocket_controller import (
+    get_websocket_router,
+    create_websocket_manager
+)
 
-class UserInput(BaseModel):
-    content: str
-    prompt: Optional[str] = None
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class BranchCreate(BaseModel):
-    base_id: UUID
-    new_prompt: str
+# OAuth2 for future auth implementation
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Initialize FastAPI
-app = FastAPI(title="NeuraCollab API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager."""
+    try:
+        # Initialize database
+        init_database()
+        logger.info("Database initialized successfully")
+        
+        # Initialize core components
+        app.state.cache_pool = NeuralCachePool()
+        app.state.ai_config = AIConfigManager()
+        app.state.dispatcher = LLMDispatcher()
+        app.state.engine = CollaborationEngine(app.state.cache_pool)
+        
+        # Initialize WebSocket manager
+        app.state.ws_manager = create_websocket_manager(
+            app.state.cache_pool,
+            app.state.engine
+        )
+        
+        # Load AI configurations
+        await load_ai_configs(app)
+        
+        # Register controllers
+        setup_routers(app)
+        
+        logger.info("Application initialized successfully")
+        yield
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        raise
+    finally:
+        logger.info("Application shutting down")
 
-# Enable CORS
+def setup_routers(app: FastAPI):
+    """Setup API routers."""
+    # Register workflow controller
+    app.include_router(
+        get_workflow_controller(
+            app.state.engine,
+            app.state.dispatcher,
+            app.state.cache_pool,
+            app.state.ws_manager
+        ),
+        prefix="/workflows",
+        tags=["workflows"]
+    )
+    
+    # Register cache controller
+    app.include_router(
+        get_cache_controller(app.state.cache_pool),
+        prefix="/cache",
+        tags=["cache"]
+    )
+    
+    # Register branch controller
+    app.include_router(
+        get_branch_controller(app.state.engine, app.state.cache_pool),
+        prefix="/branches",
+        tags=["branches"]
+    )
+
+    # Register AI config controller
+    app.include_router(
+        get_ai_config_controller(app.state.ai_config, app.state.dispatcher),
+        prefix="/ai/configs",
+        tags=["ai-configs"]
+    )
+
+    # Register WebSocket controller
+    app.include_router(
+        get_websocket_router(app.state.ws_manager),
+        tags=["websocket"]
+    )
+
+async def load_ai_configs(app: FastAPI):
+    """Load and register AI configurations."""
+    configs = app.state.ai_config.list_configs()
+    for config in configs:
+        if config.is_active:
+            try:
+                adapter = create_adapter(config.provider, config.credentials)
+                app.state.dispatcher.register_adapter(config.name, adapter)
+                logger.info(f"Registered AI adapter: {config.name}")
+            except Exception as e:
+                logger.error(f"Failed to load AI config {config.name}: {e}")
+
+# Create FastAPI application
+app = FastAPI(
+    title="NeuraCollab API",
+    description="AI Collaboration Platform API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize NeuraCollab
-collab = NeuraCollab()
-# Register a demo LLM (replace with real implementation)
-collab.register_llm("gpt4", OpenAILLM(), set_default=True)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global error handler for all unhandled exceptions."""
+    logger.error(f"Global error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc)}
+    )
 
-@app.post("/workflows/relay")
-async def start_relay_workflow(data: WorkflowStart) -> Dict:
-    """Start a relay-style collaboration workflow."""
-    try:
-        workflow_id = await collab.start_relay_workflow(
-            initial_content=data.initial_content,
-            roles=data.roles or ["writer", "editor", "reviewer"],
-            max_steps=data.max_steps or 10
-        )
-        return {"workflow_id": str(workflow_id)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/workflows/debate")
-async def start_debate_workflow(data: WorkflowStart) -> Dict:
-    """Start a debate workflow."""
-    try:
-        workflow_id = await collab.start_debate_workflow(
-            topic=data.initial_content,
-            initial_argument="Initial position on: " + data.initial_content,
-            max_rounds=data.max_steps or 3
-        )
-        return {"workflow_id": str(workflow_id)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/workflows/custom")
-async def start_custom_workflow(data: WorkflowStart) -> Dict:
-    """Start a custom workflow."""
-    try:
-        config = WorkflowConfig(**data.config) if data.config else WorkflowConfig(
-            mode="custom",
-            prompt_template="Continue the work:\n\n{context}"
-        )
-        workflow_id = await collab.start_custom_workflow(
-            config=config,
-            initial_content=data.initial_content
-        )
-        return {"workflow_id": str(workflow_id)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/workflows/{workflow_id}/step")
-async def execute_step(workflow_id: UUID, model_name: Optional[str] = None) -> Dict:
-    """Execute next step in workflow."""
-    try:
-        entry = await collab.execute_next_step(workflow_id, model_name)
-        return {
-            "entry_id": str(entry.entry_id),
-            "content": entry.content,
-            "author": entry.author,
-            "timestamp": entry.timestamp.isoformat(),
-            "metadata": entry.metadata
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/workflows/{workflow_id}/input")
-async def add_user_input(workflow_id: UUID, data: UserInput) -> Dict:
-    """Add user input to workflow."""
-    try:
-        entry = await collab.add_user_input(
-            workflow_id=workflow_id,
-            content=data.content,
-            prompt=data.prompt
-        )
-        return {
-            "entry_id": str(entry.entry_id),
-            "content": entry.content,
-            "author": entry.author,
-            "timestamp": entry.timestamp.isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/workflows/{workflow_id}/history")
-async def get_history(workflow_id: UUID) -> List[Dict]:
-    """Get workflow history."""
-    try:
-        history = collab.get_workflow_history(workflow_id)
-        return [
-            {
-                "entry_id": str(entry.entry_id),
-                "parent_id": str(entry.parent_id) if entry.parent_id else None,
-                "content": entry.content,
-                "author": entry.author,
-                "prompt": entry.prompt,
-                "timestamp": entry.timestamp.isoformat(),
-                "metadata": entry.metadata
-            }
-            for entry in history
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/workflows/branch")
-async def create_branch(data: BranchCreate) -> Dict:
-    """Create a new branch from existing entry."""
-    try:
-        branch_id = collab.create_branch(
-            base_id=data.base_id,
-            new_prompt=data.new_prompt
-        )
-        return {"branch_id": str(branch_id)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-# WebSocket for real-time updates
-@app.websocket("/ws/{workflow_id}")
-async def websocket_endpoint(websocket: WebSocket, workflow_id: UUID):
-    await websocket.accept()
-    try:
-        while True:
-            # Send updates about workflow progress
-            history = collab.get_workflow_history(workflow_id)
-            await websocket.send_json({
-                "type": "history_update",
-                "data": [
-                    {
-                        "entry_id": str(entry.entry_id),
-                        "content": entry.content,
-                        "author": entry.author,
-                        "timestamp": entry.timestamp.isoformat()
-                    }
-                    for entry in history
-                ]
-            })
-            await asyncio.sleep(1)  # Poll every second
-    except Exception:
-        await websocket.close()
+@app.get("/health")
+async def health_check():
+    """API health check endpoint."""
+    ws_connections = len(app.state.ws_manager.active_connections)
+    active_models = app.state.dispatcher.get_available_models()
+    cache_stats = {
+        "size": app.state.cache_pool.current_size,
+        "entries": len(app.state.cache_pool.entries)
+    }
+    
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "active_models": active_models,
+        "cache_stats": cache_stats,
+        "websocket_connections": ws_connections
+    }
 
 if __name__ == "__main__":
     import uvicorn

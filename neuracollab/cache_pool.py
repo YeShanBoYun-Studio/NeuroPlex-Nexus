@@ -1,52 +1,43 @@
 """
 Neural Cache Pool - Core implementation for the NeuraCollab system.
 """
-
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 import re
 import nltk
 from nltk.tokenize import sent_tokenize
+from datetime import datetime
 
 from .models import CacheEntry, WorkflowConfig
 from .storage import SQLiteConnector
 
 class ContextCompressor:
-    """
-    Intelligent context compression for managing token limits.
-    """
+    """Intelligent context compression for managing token limits."""
     def __init__(self):
-        # Download required NLTK data
         try:
             nltk.data.find('tokenizers/punkt')
         except LookupError:
             nltk.download('punkt')
+        self.enabled = True
+        self.threshold = 0.8
 
     def compress(self, text: str, target_length: int = 2000) -> str:
-        """
-        Compress text while preserving key information.
-        Uses intelligent sentence selection based on information density.
-        """
+        """Compress text while preserving key information."""
         sentences = sent_tokenize(text)
         if len(sentences) <= 3:
             return text
 
-        # Calculate information density for each sentence
         densities = []
         for sentence in sentences:
-            # Simple density metric based on key indicators
             density = sum([
-                2 if re.search(r'\d+', sentence) else 0,  # Numbers often indicate key facts
+                2 if re.search(r'\d+', sentence) else 0,
                 3 if re.search(r'therefore|thus|hence|conclude', sentence, re.I) else 0,
                 2 if re.search(r'important|significant|key|critical', sentence, re.I) else 0,
-                1 if len(sentence.split()) > 5 else 0  # Favor complete thoughts
+                1 if len(sentence.split()) > 5 else 0
             ])
             densities.append(density)
 
-        # Always keep first and last sentences for context
         selected = [sentences[0]]
-        
-        # Select highest density sentences
         middle_sentences = list(zip(sentences[1:-1], densities[1:-1]))
         middle_sentences.sort(key=lambda x: x[1], reverse=True)
         
@@ -57,29 +48,32 @@ class ContextCompressor:
             selected.append(sentence)
             current_length += len(sentence)
 
-        # Add the last sentence
         if current_length + len(sentences[-1]) <= target_length:
             selected.append(sentences[-1])
 
         return " ".join(selected)
 
 class NeuralCachePool:
-    """
-    Intelligent cache pool management engine.
-    """
+    """Intelligent cache pool management engine."""
     def __init__(self, max_context_length: int = 16000):
         self.storage = SQLiteConnector()
         self.compressor = ContextCompressor()
         self.max_context = max_context_length
+        self._summarizer = None
 
-    def add_entry(self, entry: CacheEntry) -> UUID:
+    def set_summarizer(self, summarizer: Any):
+        """Set the summarizer instance."""
+        self._summarizer = summarizer
+
+    async def add_entry(self, entry: CacheEntry) -> UUID:
         """Add a new entry to the cache pool."""
+        if self._summarizer:
+            summary = await self._summarizer.generate(entry.content)
+            entry.metadata['summary'] = summary
         return self.storage.insert(entry)
 
     def get_context(self, current_id: UUID, config: WorkflowConfig) -> str:
-        """
-        Generate context for the next step based on configuration rules.
-        """
+        """Generate context based on configuration rules."""
         history = self._get_relevant_history(current_id, config)
         raw_text = self._build_raw_context(history, config)
         
@@ -91,45 +85,35 @@ class NeuralCachePool:
         """Get relevant historical entries based on inheritance rules."""
         full_history = self.storage.get_branch(current_id)
         
-        if config.inheritance_rules["full_history"]:
-            return full_history
-        elif config.inheritance_rules["last_3_steps"]:
+        if config.inheritance_rules.get("last_3_steps"):
             return full_history[-3:]
+        elif config.inheritance_rules.get("full_history"):
+            return full_history
         else:
-            # Custom filtering based on metadata
             return [
                 entry for entry in full_history
                 if self._should_include_entry(entry, config)
             ]
 
     def _build_raw_context(self, history: List[CacheEntry], config: WorkflowConfig) -> str:
-        """Build initial context from historical entries."""
+        """Build context from historical entries."""
         context_parts = []
         
         for entry in history:
-            # Add prompt if configured
-            if config.inheritance_rules["prompt_chain"]:
-                context_parts.append(f"[Prompt: {entry.prompt}]")
-            
-            # Add content with metadata
-            meta_str = ""
-            if entry.metadata:
-                meta_str = f" (Author: {entry.author}"
-                if "role" in entry.metadata:
-                    meta_str += f", Role: {entry.metadata['role']}"
-                meta_str += ")"
-            
-            context_parts.append(f"{entry.content}{meta_str}")
+            if 'summary' in entry.metadata:
+                context_parts.append(f"Summary of step {entry.entry_id}:\n{entry.metadata['summary']}")
+            else:
+                if config.inheritance_rules.get("prompt_chain"):
+                    context_parts.append(f"[Prompt: {entry.prompt}]")
+                context_parts.append(f"{entry.content}")
 
         return "\n\n".join(context_parts)
 
     def _should_include_entry(self, entry: CacheEntry, config: WorkflowConfig) -> bool:
-        """Determine if an entry should be included based on custom rules."""
+        """Determine if an entry should be included based on rules."""
         if config.mode == "debate":
-            # For debate, include entries with opposing viewpoints
             return "position" in entry.metadata
         elif config.mode == "relay":
-            # For relay, prioritize entries from different roles
             return "role" in entry.metadata
         return True
 
@@ -146,4 +130,4 @@ class NeuralCachePool:
             author="System:Branch",
             metadata={"branch_from": str(base_id)}
         )
-        return self.add_entry(new_entry)
+        return self.storage.insert(new_entry)

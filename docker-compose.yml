@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+      target: ${TARGET:-production}
+    ports:
+      - "8000:8000"
+    environment:
+      - NEURACOLLAB_ENV=${NEURACOLLAB_ENV:-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - ./data/cache:/app/data/cache
+      - ./data/config:/app/data/config
+    depends_on:
+      - db
+      - redis
+      - ollama
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: docker/frontend/Dockerfile
+      target: ${TARGET:-production}
+      args:
+        - VITE_API_URL=${API_URL:-http://localhost:8000}
+        - VITE_WS_URL=${WS_URL:-ws://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-neuracollab}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-neuracollab}
+      - POSTGRES_DB=${POSTGRES_DB:-neuracollab}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/certs:/etc/nginx/certs
+      - ./frontend/dist:/usr/share/nginx/html
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_models:

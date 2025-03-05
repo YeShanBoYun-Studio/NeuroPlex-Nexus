@@ -4,7 +4,23 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "vite/client"],
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "target": "ESNext",
+    "lib": ["ESNext"]
   },
-  "include": ["vite.config.ts"]
+  "include": [
+    "vite.config.ts",
+    ".eslintrc.cjs",
+    "src/env.d.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build", "coverage"]
 }

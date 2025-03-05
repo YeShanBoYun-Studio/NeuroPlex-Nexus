@@ -1,0 +1,76 @@
+{
+  "common": {
+    "submit": "提交",
+    "cancel": "取消",
+    "save": "保存",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "settings": "设置",
+    "refresh": "刷新",
+    "language": "语言",
+    "search": "搜索",
+    "filter": "筛选",
+    "sort": "排序",
+    "menu": "菜单",
+    "send": "发送",
+    "theme": {
+      "name": "主题",
+      "change": "更改主题",
+      "light": "明亮",
+      "dark": "暗黑",
+      "system": "系统"
+    }
+  },
+  "errors": {
+    "notFound": "未找到",
+    "serverError": "服务器错误",
+    "unauthorized": "请先登录",
+    "forbidden": "访问被拒绝",
+    "required": "此字段为必填项",
+    "workflow_error": "工作流错误",
+    "invalid_json": "无效的JSON格式",
+    "network_error": "网络连接错误"
+  },
+  "settings": {
+    "title": "设置",
+    "max_steps": "最大步骤数",
+    "inheritance": {
+      "title": "上下文继承",
+      "full_history": "完整历史",
+      "last_3_steps": "最后3步",
+      "prompt_chain": "提示链"
+    }
+  },
+  "workflow": {
+    "relay": {
+      "title": "接力模式",
+      "description": "共同构建想法",
+      "session_name": "会话名称",
+      "initial_content": "初始内容",
+      "enter_prompt": "输入您的提示",
+      "press_enter": "按回车键发送",
+      "start": "开始接力"
+    },
+    "debate": {
+      "title": "辩论模式",
+      "description": "探索不同观点",
+      "select_topic": "选择主题",
+      "enter_topic": "输入主题",
+      "your_position": "您的立场",
+      "pro": "正方",
+      "con": "反方",
+      "start": "开始辩论"
+    },
+    "custom": {
+      "title": "自定义模式",
+      "description": "创建您的工作流",
+      "workflow_name": "工作流名称",
+      "prompt_template": "提示模板",
+      "prompt_variables": "变量 (JSON)",
+      "initial_content": "初始内容",
+      "advanced_settings": "高级设置",
+      "start": "开始工作流"
+    }
+  }
+}

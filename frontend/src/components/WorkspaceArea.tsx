@@ -10,6 +10,8 @@ import {
     CardContent,
     IconButton,
     Tooltip,
+    Snackbar,
+    Alert,
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -18,22 +20,19 @@ import {
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { apiService } from '../services/api';
-import { CacheEntry, UserInput } from '../types/api';
-
-interface WorkspaceAreaProps {
-    workflowId?: string;
-    mode: 'relay' | 'debate' | 'custom';
-    onWorkflowStart: (content: string) => Promise<void>;
-}
+import { WorkspaceAreaProps, CacheEntry, UserInput, WorkflowConfig } from '../types/api';
+import { useTranslation } from '../contexts/LanguageContext';
 
 export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
-    workflowId,
     mode,
+    workflowId,
     onWorkflowStart,
 }) => {
+    const { t } = useTranslation();
     const [history, setHistory] = useState<CacheEntry[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (workflowId) {
@@ -47,16 +46,18 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
 
     const loadHistory = async () => {
         if (!workflowId) return;
-        const response = await apiService.getHistory(workflowId);
-        if (response.data) {
+        try {
+            const response = await apiService.getHistory(workflowId);
             setHistory(response.data);
+        } catch (e) {
+            setError(t('errors.network_error'));
         }
     };
 
     const setupWebSocket = () => {
         if (!workflowId) return;
         apiService.connectWebSocket(workflowId, (update) => {
-            if (update.type === 'history_update') {
+            if (update.type === 'history_update' && Array.isArray(update.data)) {
                 setHistory(update.data);
             }
         });
@@ -66,42 +67,52 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
         if (!workflowId || !userInput.trim()) return;
 
         setIsLoading(true);
-        const input: UserInput = {
-            content: userInput,
-            prompt: `User input for ${mode} mode`,
-        };
+        try {
+            const input: UserInput = {
+                content: userInput,
+                prompt: `${t('workflow.user_input')} (${mode})`,
+                metadata: {}
+            };
 
-        const response = await apiService.addUserInput(workflowId, input);
-        if (response.data) {
+            await apiService.addUserInput(workflowId, input);
             setUserInput('');
             await loadHistory();
+        } catch (e) {
+            setError(t('errors.model_error'));
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const handleExecuteStep = async () => {
         if (!workflowId) return;
 
         setIsLoading(true);
-        const response = await apiService.executeStep(workflowId);
-        if (response.data) {
+        try {
+            await apiService.executeStep(workflowId, null);
             await loadHistory();
+        } catch (e) {
+            setError(t('errors.model_error'));
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const handleCreateBranch = async (entryId: string) => {
         if (!workflowId) return;
 
-        const prompt = window.prompt('Enter new branch prompt:');
+        const prompt = window.prompt(t('workflow.branch_prompt'));
         if (prompt) {
-            const response = await apiService.createBranch({
-                base_id: entryId,
-                new_prompt: prompt,
-            });
-            if (response.data) {
-                // You might want to navigate to the new branch here
+            try {
+                const response = await apiService.createBranch(workflowId, {
+                    base_id: entryId,
+                    prompt,
+                    metadata: {}
+                });
+                // Handle branch creation success
                 console.log('Created branch:', response.data.branch_id);
+            } catch (e) {
+                setError(t('errors.network_error'));
             }
         }
     };
@@ -111,7 +122,10 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
             <Box sx={{ p: 3 }}>
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
-                        Start New {mode.charAt(0).toUpperCase() + mode.slice(1)} Workflow
+                        {t(`workflow.${mode}.title`)}
+                    </Typography>
+                    <Typography color="textSecondary" gutterBottom>
+                        {t(`workflow.${mode}.description`)}
                     </Typography>
                     <TextField
                         fullWidth
@@ -119,16 +133,30 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
                         rows={4}
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
-                        placeholder="Enter initial content..."
+                        placeholder={t('workflow.initial_content')}
                         variant="outlined"
                         sx={{ mb: 2 }}
                     />
                     <Button
                         variant="contained"
-                        onClick={() => onWorkflowStart(userInput)}
+                        onClick={() => {
+                            const config: WorkflowConfig = {
+                                prompt_template: '',
+                                inheritance_rules: {
+                                    full_history: false,
+                                    last_3_steps: true,
+                                    prompt_chain: true
+                                },
+                                termination_conditions: {
+                                    max_steps: 10,
+                                    inactivity_timeout: 300
+                                }
+                            };
+                            onWorkflowStart(userInput, config);
+                        }}
                         disabled={!userInput.trim() || isLoading}
                     >
-                        Start Workflow
+                        {t(`workflow.${mode}.start`)}
                     </Button>
                 </Paper>
             </Box>
@@ -147,7 +175,7 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
                                     {entry.author}
                                 </Typography>
                                 <Box>
-                                    <Tooltip title="Create Branch">
+                                    <Tooltip title={t('workflow.new_branch')}>
                                         <IconButton
                                             size="small"
                                             onClick={() => handleCreateBranch(entry.entry_id)}
@@ -179,7 +207,7 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
                         disabled={isLoading}
                         startIcon={<PlayArrowIcon />}
                     >
-                        Execute Step
+                        {t('workflow.execute')}
                     </Button>
                 </Box>
             </Paper>
@@ -193,7 +221,7 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
                         rows={3}
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
-                        placeholder="Enter your input..."
+                        placeholder={t('workflow.input_placeholder')}
                         variant="outlined"
                     />
                     <Button
@@ -207,6 +235,16 @@ export const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({
                     </Button>
                 </Box>
             </Paper>
+
+            <Snackbar
+                open={!!error}
+                autoHideDuration={6000}
+                onClose={() => setError(null)}
+            >
+                <Alert severity="error" onClose={() => setError(null)}>
+                    {error}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

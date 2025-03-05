@@ -1,0 +1,133 @@
+{
+    "workflows": {
+        "relay": {
+            "name": "story_continuation",
+            "mode": "relay",
+            "initial_content": "Once upon a time in a digital realm...",
+            "config": {
+                "prompt_template": "Continue the story in the same style and tone.",
+                "inheritance_rules": {
+                    "full_history": true,
+                    "last_3_steps": false,
+                    "prompt_chain": true
+                },
+                "termination_conditions": {
+                    "max_steps": 10,
+                    "inactivity_timeout": 600
+                }
+            }
+        },
+        "debate": {
+            "name": "ai_ethics_debate",
+            "mode": "debate",
+            "initial_content": "Should AI systems be granted legal personhood?",
+            "config": {
+                "prompt_template": "Consider the previous arguments and provide a counter-argument.",
+                "inheritance_rules": {
+                    "full_history": true,
+                    "last_3_steps": false,
+                    "prompt_chain": true
+                },
+                "termination_conditions": {
+                    "max_steps": 6,
+                    "inactivity_timeout": 900
+                }
+            }
+        },
+        "custom": {
+            "name": "code_review",
+            "mode": "custom",
+            "initial_content": "def hello_world():\n    print('Hello, World!')",
+            "config": {
+                "prompt_template": "Review the code for best practices and suggest improvements.",
+                "inheritance_rules": {
+                    "full_history": true,
+                    "last_3_steps": true,
+                    "prompt_chain": true
+                },
+                "termination_conditions": {
+                    "max_steps": 3,
+                    "inactivity_timeout": 300
+                },
+                "roles": {
+                    "reviewer": {
+                        "model": "gpt-4",
+                        "instructions": "Act as an expert code reviewer"
+                    }
+                }
+            }
+        }
+    },
+    "ai_configs": {
+        "openai_gpt4": {
+            "provider": "openai",
+            "name": "gpt4_standard",
+            "credentials": {
+                "api_key": "test_key_gpt4",
+                "model_name": "gpt-4"
+            },
+            "is_active": true,
+            "priority": 1,
+            "rate_limit": 100
+        },
+        "azure_gpt35": {
+            "provider": "azure",
+            "name": "azure_gpt35",
+            "credentials": {
+                "api_key": "test_key_azure",
+                "endpoint": "https://test.openai.azure.com",
+                "deployment_name": "gpt-35-turbo"
+            },
+            "is_active": true,
+            "priority": 2,
+            "rate_limit": 200
+        },
+        "ollama_local": {
+            "provider": "ollama",
+            "name": "local_llama2",
+            "credentials": {
+                "base_url": "http://localhost:11434",
+                "model_name": "llama2"
+            },
+            "is_active": true,
+            "priority": 3,
+            "rate_limit": null
+        }
+    },
+    "cache_settings": {
+        "minimal": {
+            "max_size_mb": 50,
+            "compression_enabled": false,
+            "compression_threshold": 0.0
+        },
+        "standard": {
+            "max_size_mb": 200,
+            "compression_enabled": true,
+            "compression_threshold": 0.7
+        },
+        "performance": {
+            "max_size_mb": 500,
+            "compression_enabled": true,
+            "compression_threshold": 0.5
+        }
+    },
+    "test_prompts": {
+        "short": "Write a one-sentence summary.",
+        "medium": "Explain the concept of artificial intelligence in a few paragraphs.",
+        "long": "Write a detailed analysis of the impact of machine learning on modern society, considering economic, social, and ethical implications."
+    },
+    "websocket_messages": {
+        "history_request": {
+            "type": "request_history",
+            "timestamp": "2025-01-01T00:00:00Z"
+        },
+        "step_status": {
+            "type": "step_status",
+            "timestamp": "2025-01-01T00:00:00Z"
+        },
+        "ping": {
+            "type": "ping",
+            "timestamp": "2025-01-01T00:00:00Z"
+        }
+    }
+}
